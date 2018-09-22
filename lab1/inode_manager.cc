@@ -30,7 +30,7 @@ block_manager::alloc_block()
    * note: you should mark the corresponding bit in block bitmap when alloc.
    * you need to think about which block you can start to be allocated.
    */
-  /*
+  
   std::map<uint32_t, int>::iterator it;
   for (it=using_blocks.begin();it != using_blocks.end();it++){
 
@@ -38,7 +38,7 @@ block_manager::alloc_block()
       it->second == 1;
       return it->first;
     }
-  }*/
+  }
 
   return 0;
 }
@@ -101,20 +101,18 @@ inode_manager::alloc_inode(uint32_t type)
    * note: the normal inode block should begin from the 2nd inode block.
    * the 1st is used for root_dir, see inode_manager::inode_manager().
    */
-  static uint32_t inum = 1;
-    if(inum >= INODE_NUM)
-        return 0;
-    char buf[BLOCK_SIZE];
-    struct inode *ino_disk;
+  static uint32_t inum = 0;
+  inum++;
+  char buf[BLOCK_SIZE];
+  struct inode *ino;
 
-    bm->read_block(IBLOCK(inum, BLOCK_NUM), buf);
-    ino_disk = (struct inode*)buf + inum%IPB;
-    ino_disk->type = type;
-    ino_disk->size = 0;
-    ino_disk->atime = ino_disk->mtime = ino_disk->ctime = time(NULL);
-    bm->write_block(IBLOCK(inum, BLOCK_NUM), buf);
-    return inum++;
-  return 1;
+  bm->read_block(IBLOCK(inum, BLOCK_NUM), buf);
+  ino = (struct inode*)buf + inum%IPB;
+  ino->type = type;
+  ino->size = 0;
+  ino->atime = ino->mtime = ino->ctime = time(NULL);
+  bm->write_block(IBLOCK(inum, BLOCK_NUM), buf);
+  return inum;
 }
 
 void

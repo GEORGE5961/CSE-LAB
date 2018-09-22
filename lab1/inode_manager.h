@@ -55,7 +55,7 @@ class block_manager {
 //(BLOCK_SIZE / sizeof(struct inode))
 
 // Block containing inode i
-#define IBLOCK(i, nblocks)     ((nblocks)/BPB + (i)/IPB + 3)   // return block number
+#define IBLOCK(i, nblocks)     ((nblocks)/BPB + (i)/IPB + 3)   // return block number, (nblocks)/BPB:size of bitmap
 
 // Bitmap bits per block
 #define BPB           (BLOCK_SIZE*8)
