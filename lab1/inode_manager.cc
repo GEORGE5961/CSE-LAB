@@ -123,7 +123,20 @@ inode_manager::free_inode(uint32_t inum)
    * note: you need to check if the inode is already a freed one;
    * if not, clear it, and remember to write back to disk.
    */
-
+  struct inode *node = get_inode(inum);
+  if (node != NULL)
+  {
+    if (node->type == 1 || node->type == 2)
+    {
+      node->type = 0;
+      node->size = node->atime = node->ctime  = node->mtime = 0;
+      put_inode(inum, node);
+    }
+  }
+  else
+  {
+    printf("Free inode error\n");
+  }
   return;
 }
 
@@ -186,6 +199,45 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
    * note: read blocks related to inode number inum,
    * and copy them to buf_Out
    */
+  struct inode * inode = get_inode(inum);
+
+  if (inode == NULL){
+      printf("Cannot find inode");
+  }
+
+  *size = inode->size;
+  uint32_t nsize = inode->size;
+
+  uint32_t nblock = (nsize + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  *buf_out = (char *)malloc(nblock * BLOCK_SIZE);
+
+  if (NDIRECT >= nblock)
+  {
+    for (uint32_t i = 0; i < nblock; i++)
+    {
+      bm->read_block(inode->blocks[i], *buf_out + i * BLOCK_SIZE);
+    }
+
+    free(inode);
+    return;
+  }
+  else
+  {
+    for (uint32_t i = 0; i < NDIRECT; i++)
+    {
+      bm->read_block(inode->blocks[i], *buf_out + i * BLOCK_SIZE);
+    }
+
+    blockid_t *buf_tmp = (blockid_t *)malloc(BLOCK_SIZE);
+    bm->read_block(inode->blocks[NDIRECT], (char *)buf_tmp);
+    for (uint32_t i = 0; i < nblock - NDIRECT; i++)
+    {
+      bm->read_block(buf_tmp[i], *buf_out + NDIRECT * BLOCK_SIZE + i * BLOCK_SIZE);
+    }
+    free(buf_tmp);
+    free(inode);
+    return;
+  }
   
   return;
 }
@@ -200,7 +252,156 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
    * you need to consider the situation when the size of buf 
    * is larger or smaller than the size of original inode
    */
-  
+  struct inode * inode = get_inode(inum);
+  uint32_t old_num = (inode->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  uint32_t new_num = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  inode->size = size;
+  inode->mtime = time(NULL);
+
+  if (inode == NULL){
+      printf("Cannot find inode");
+  }
+
+  if(new_num <= old_num){
+    // new_num <= old_num < NDIRECT
+    if(old_num< NDIRECT){
+      for (uint32_t i = 0; i < old_num - new_num; i++)
+      {
+        bm->free_block(inode->blocks[new_num + i]);
+      }
+
+      for (uint32_t i = 0; i < new_num; i++)
+      {
+        bm->write_block(inode->blocks[i], buf + i * BLOCK_SIZE);
+      }
+
+      inode->size = size;
+      put_inode(inum, inode);
+      free(inode);
+      return;
+    }   
+    else{  
+      if(new_num <= NDIRECT){
+    
+        blockid_t *buf_tmp = (blockid_t *)malloc(BLOCK_SIZE);
+        bm->read_block(inode->blocks[NDIRECT], (char*)buf_tmp);
+        for (uint32_t i = 0; i < old_num - NDIRECT; i++)
+        {
+          bm->free_block(buf_tmp[i]);
+        }
+        bm->free_block(inode->blocks[NDIRECT]); 
+        
+        for (uint32_t i = 0; i < NDIRECT - new_num; i++)
+        {
+          bm->free_block(inode->blocks[new_num + i]);
+        }
+
+        for (uint32_t i = 0; i < new_num; i++)
+        {
+          bm->write_block(inode->blocks[i], buf + i * BLOCK_SIZE);
+        }
+        put_inode(inum, inode);
+        free(inode);
+        return;
+      }
+      //  NDIRECT < new_num <= old_num
+      else{
+
+        blockid_t *buf_tmp = (blockid_t *)malloc(BLOCK_SIZE);
+        bm->read_block(inode->blocks[NDIRECT], (char*)buf_tmp);
+        for (uint32_t i = 0; i < old_num - new_num; i++)
+        {
+          bm->free_block(buf_tmp[new_num + i]);
+        }
+
+        for (uint32_t i = 0; i < NDIRECT; i++)
+        {
+          bm->write_block(inode->blocks[i], buf + i * BLOCK_SIZE);
+        }
+
+        for (uint32_t i = 0; i < new_num - NDIRECT; i++)
+        {
+          bm->write_block(buf_tmp[i], buf + (NDIRECT * BLOCK_SIZE) + i * BLOCK_SIZE);
+        }
+
+        bm->write_block(inode->blocks[NDIRECT], (char*) buf_tmp);
+        put_inode(inum, inode);
+        free(inode);
+        return;
+      }      
+    }
+  }
+  // new_num > old_num
+  else{
+    // NDIRECT > new_num > old_num
+    if (new_num <= NDIRECT){
+      for (uint32_t i = 0; i < new_num - old_num; i++)
+      {
+        inode->blocks[old_num + i] = bm->alloc_block();
+      }
+      // write blocks
+      for (uint32_t i = 0; i < new_num; i++)
+      {
+        bm->write_block(inode->blocks[i], buf + i * BLOCK_SIZE);
+      }
+      put_inode(inum, inode);
+      free(inode);
+      return;
+
+    }
+    // new_num > NDIRECT >= old_num
+    else if(NDIRECT >= old_num){
+      for (uint32_t i = 0; i < NDIRECT - old_num; i++)
+      {
+        inode->blocks[old_num + i] = bm->alloc_block();
+      }
+      blockid_t *buf_tmp = (blockid_t *)malloc(BLOCK_SIZE);
+      inode->blocks[NDIRECT] = bm->alloc_block();
+      for (uint32_t i = 0; i < new_num - NDIRECT; i++)
+      {
+        buf_tmp[i] = bm->alloc_block();
+      }
+
+      for (uint32_t i = 0; i < NDIRECT; i++)
+        {
+          bm->write_block(inode->blocks[i], buf + i * BLOCK_SIZE);
+        }
+      for (uint32_t i = 0; i < new_num - NDIRECT; i++)
+      {
+        bm->write_block(buf_tmp[i], buf + (NDIRECT * BLOCK_SIZE) + i * BLOCK_SIZE);
+      }
+      bm->write_block(inode->blocks[NDIRECT], (char *)buf_tmp);
+      put_inode(inum, inode);
+      delete(buf_tmp);
+      free(inode);
+      return;
+      
+    }
+    // new_num >= old_num > NDIRECT
+    else{
+      blockid_t *buf_tmp = (blockid_t *)malloc(BLOCK_SIZE);
+      for (uint32_t i = 0; i < new_num - old_num; i++)
+      {
+        buf_tmp[old_num + i] = bm->alloc_block();
+      }
+
+      // write direct blocks
+      for (uint32_t i = 0; i < NDIRECT; i++)
+      {
+        bm->write_block(inode->blocks[i], buf + i * BLOCK_SIZE);
+      }
+      for (uint32_t i = 0; i < new_num - NDIRECT; i++)
+      {
+        bm->write_block(buf_tmp[i], buf + (NDIRECT * BLOCK_SIZE) + i * BLOCK_SIZE);
+      }
+
+      bm->write_block(inode->blocks[NDIRECT], (char *)buf_tmp);
+      put_inode(inum, inode);
+      free(buf_tmp);
+      free(inode);
+      return;
+    }
+  }
   return;
 }
 

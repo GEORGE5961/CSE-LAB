@@ -70,9 +70,9 @@ class block_manager {
 typedef struct inode {
   short type;
   unsigned int size;
-  unsigned int atime;
-  unsigned int mtime;
-  unsigned int ctime;
+  unsigned int atime;    // the last time READ
+  unsigned int mtime;    // the last time WRITE
+  unsigned int ctime;    // the last time LINK
   blockid_t blocks[NDIRECT+1];   // Data block addresses
 } inode_t;
 
