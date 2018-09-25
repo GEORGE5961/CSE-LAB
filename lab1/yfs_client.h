@@ -34,6 +34,7 @@ class yfs_client {
  private:
   static std::string filename(inum);
   static inum n2i(std::string);
+  static std::list<yfs_client::dirent> str2list(const std::string &str);
 
  public:
   yfs_client();

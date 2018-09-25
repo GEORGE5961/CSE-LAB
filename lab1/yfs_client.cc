@@ -144,6 +144,38 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
      * note: lookup is what you need to check if file exist;
      * after create file or dir, you must remember to modify the parent infomation.
      */
+    bool found=false;
+	inum fresult=0;
+	if(lookup(parent,name,found,fresult)!=extent_protocol::OK) {
+        	r = IOERR;
+        	return r;
+    	}
+	if(found){
+		r = EXIST;
+		return r;
+	}
+	std::string buf;
+	if(ec->get(parent, buf) != extent_protocol::OK) {
+        	r = IOERR;
+        	return r;
+    	}
+	if(ec->create(extent_protocol::T_FILE,ino_out)!=extent_protocol::OK){
+		r = IOERR;
+		return r;
+	}
+	buf+=name;
+	buf+='./';
+    std::stringstream st;
+	std::string rst;
+	st<<ino_out;
+	st>>rst;
+    buf+= rst;
+	//buf+=i2n(ino_out);
+	buf+='./';
+	if(ec->put(parent,buf)!=extent_protocol::OK){
+		r = IOERR;
+	}
+	return r;
 
     return r;
 }
@@ -172,7 +204,20 @@ yfs_client::lookup(inum parent, const char *name, bool &found, inum &ino_out)
      * note: lookup file from parent dir according to name;
      * you should design the format of directory content.
      */
-
+    found = false;
+    std::string buf;
+	if(ec->get(parent, buf) != extent_protocol::OK) {
+        return IOERR;
+    }
+	std::list<dirent> dir_list = str2list(buf);
+    std::list<dirent>::iterator it;
+	for (it=dir_list.begin(); it!=dir_list.end(); ++it){
+		if(it->name==name){
+			found=true;
+			ino_out=it->inum;
+			return r;
+		}
+	}
     return r;
 }
 
@@ -186,7 +231,16 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
      * note: you should parse the dirctory content using your defined format,
      * and push the dirents to the list.
      */
-
+    std::string buf;
+	if (ec->get(dir, buf) != extent_protocol::OK) {
+        return IOERR;
+    }
+    std::list<dirent> dir_list=str2list(buf);
+    std::list<dirent>::iterator it;
+    for (it=dir_list.begin(); it!=dir_list.end(); ++it)
+    {
+        list.push_back(*it);
+    }
     return r;
 }
 
@@ -231,3 +285,28 @@ int yfs_client::unlink(inum parent,const char *name)
     return r;
 }
 
+std::list<yfs_client::dirent> yfs_client::str2list(const std::string &str){
+
+    std::vector<std::string> dir_vec;
+    std::list<yfs_client::dirent> rst;
+    size_t mark = 0;
+	size_t pos =str.find_first_of('/', mark);
+    while(pos!=std::string::npos){
+        dir_vec.push_back(str.substr(mark,pos-mark));
+        mark = pos+1;
+        pos = str.find_first_of('./',mark);
+	}
+    if(mark < str.size()){
+		dir_vec.push_back(str.substr(mark,str.size()-mark));
+	}
+    for(int i=0;i<dir_vec.size();i+=2){
+		yfs_client::dirent tmpdir;
+		if(i==dir_vec.size()-1){
+			break;
+		}
+		tmpdir.name=dir_vec[i];
+		tmpdir.inum=n2i(dir_vec[i+1]);
+		rst.push_back(tmpdir);
+	}
+	return rst;
+}
