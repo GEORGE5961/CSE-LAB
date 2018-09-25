@@ -130,7 +130,23 @@ yfs_client::setattr(inum ino, size_t size)
      * note: get the content of inode ino, and modify its content
      * according to the size (<, =, or >) content length.
      */
-
+    extent_protocol::attr a;
+    if (ec->getattr(ino, a) != extent_protocol::OK) {
+        return IOERR;
+    }
+    std::string buf;
+    char *new_char=new char[size];
+    if(ec->get(ino, buf) != extent_protocol::OK) {
+        return IOERR;
+    }
+    size_t copy_size = size<a.size ? size:a.size;
+    memcpy(new_char,buf.c_str(), copy_size);
+    std::string newbuf(new_char);
+    if(ec->put(ino,newbuf)!=extent_protocol::OK){
+        free(new_char);
+        return IOERR;
+    }
+	free(new_char);
     return r;
 }
 
@@ -145,39 +161,32 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
      * after create file or dir, you must remember to modify the parent infomation.
      */
     bool found=false;
-	inum fresult=0;
-	if(lookup(parent,name,found,fresult)!=extent_protocol::OK) {
-        	r = IOERR;
-        	return r;
-    	}
+	inum fir_inum=0;
+	if(lookup(parent,name,found,fir_inum)!=extent_protocol::OK) {
+        return IOERR;
+    }
 	if(found){
-		r = EXIST;
-		return r;
+		return EXIST;
 	}
 	std::string buf;
 	if(ec->get(parent, buf) != extent_protocol::OK) {
-        	r = IOERR;
-        	return r;
-    	}
+        return IOERR;
+    }
 	if(ec->create(extent_protocol::T_FILE,ino_out)!=extent_protocol::OK){
-		r = IOERR;
-		return r;
+		return IOERR;
 	}
-	buf+=name;
-	buf+='./';
+	buf += name;
+	buf += './';
     std::stringstream st;
-	std::string rst;
+	std::string str;
 	st<<ino_out;
-	st>>rst;
-    buf+= rst;
-	//buf+=i2n(ino_out);
+	st>>str;
+    buf+= str;
 	buf+='./';
 	if(ec->put(parent,buf)!=extent_protocol::OK){
 		r = IOERR;
 	}
 	return r;
-
-    return r;
 }
 
 int
@@ -253,7 +262,19 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
      * your code goes here.
      * note: read using ec->get().
      */
-
+    ec->get(ino, data);
+    if (off <= data.size())
+    {
+        if (off + size <= data.size())
+        {
+            data = data.substr(off, size);
+        } 
+        else
+        {
+            uint len = data.size();
+            data = data.substr(off, len - off);
+        }
+    }
     return r;
 }
 
@@ -268,7 +289,25 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
      * note: write using ec->put().
      * when off > length of original file, fill the holes with '\0'.
      */
-
+    std::string buf;
+	if (ec->get(ino, buf) != extent_protocol::OK) {
+        	r = IOERR;
+        	return r;
+    	}
+	if(off+size>buf.size()){
+		buf.resize(off+size,'\0');
+	}
+	buf.replace(off,size,data,size);
+	if(off<=buf.size()){
+		bytes_written=size;
+	}
+	else{
+		bytes_written=off-buf.size()+size;
+	}			
+	if (ec->put(ino, buf) != extent_protocol::OK) {
+        	r = IOERR;
+        	return r;
+    }
     return r;
 }
 
