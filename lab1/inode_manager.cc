@@ -31,16 +31,25 @@ block_manager::alloc_block()
    * you need to think about which block you can start to be allocated.
    */
   
-  std::map<uint32_t, int>::iterator it;
-  for (it=using_blocks.begin();it != using_blocks.end();it++){
-
-    if(it->second == 0){
-      it->second == 1;
-      return it->first;
-    }
+  static uint32_t id = IBLOCK(INODE_NUM, BLOCK_NUM);
+  char buf[BLOCK_SIZE];
+  for(uint32_t i=0; i<BLOCK_NUM; i++){
+      d->read_block(BBLOCK(id), buf);
+      uint32_t pos = id % BLOCK_SIZE;
+      uint32_t* bits = &((uint32_t*)buf)[pos/sizeof(uint32_t)];
+      if((*bits & (1 << pos)) == 0){
+          *bits |= (1 << pos);
+          d->write_block(BBLOCK(id), buf);
+          return id++;
+      }
+      else{
+          id++;
+          if(id >= BLOCK_NUM){
+              id = id%BLOCK_NUM+IBLOCK(INODE_NUM, BLOCK_NUM);
+          }
+      }
   }
-
-  return 0;
+  return -1;
 }
 
 void
@@ -50,7 +59,13 @@ block_manager::free_block(uint32_t id)
    * your code goes here.
    * note: you should unmark the corresponding bit in the block bitmap when free.
    */
-  
+  blockid_t bblock = BBLOCK(id);
+  char buf[BLOCK_SIZE];
+  d->read_block(bblock, buf);
+  uint32_t pos = id % BLOCK_SIZE;
+  uint32_t* bits = &((uint32_t*)buf)[pos/sizeof(uint32_t)];
+  *bits &= ~(1 << pos);
+  d->write_block(bblock, buf);
   return;
 }
 
