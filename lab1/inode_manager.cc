@@ -429,6 +429,12 @@ inode_manager::getattr(uint32_t inum, extent_protocol::attr &a)
    * you can refer to "struct attr" in extent_protocol.h
    */
   struct inode* node =  get_inode(inum);
+  if (node == NULL){
+    a.type = 0;
+    a.size = 0;
+    printf("getAttr error\n");
+    return;
+  }
   a.atime = node->atime;
   a.ctime = node->ctime;
   a.mtime = node->mtime;
@@ -445,6 +451,18 @@ inode_manager::remove_file(uint32_t inum)
    * your code goes here
    * note: you need to consider about both the data block and inode of the file
    */
-  
+  struct inode *inode = get_inode(inum);
+  uint32_t nblock = (inode->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  if (nblock <= NDIRECT)
+  {
+    free_inode(inum);
+    return;
+  }
+  blockid_t *buf = (blockid_t *)malloc(BLOCK_SIZE);
+  bm->read_block(inode->blocks[NDIRECT], (char *)buf);
+  for (uint32_t i = 0; i < nblock - NDIRECT; i++)
+  {
+    bm->free_block(buf[i]);
+  }
   return;
 }
