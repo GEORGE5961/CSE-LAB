@@ -199,8 +199,33 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
      * note: lookup is what you need to check if directory exist;
      * after create file or dir, you must remember to modify the parent infomation.
      */
-
-    return r;
+    bool found=false;
+	inum fir_inum=0;
+	if(lookup(parent,name,found,fir_inum)!=extent_protocol::OK) {
+        return IOERR;
+    }
+	if(found){
+		return EXIST;
+	}
+	std::string buf;
+	if(ec->get(parent, buf) != extent_protocol::OK) {
+        return IOERR;
+    }
+	if(ec->create(extent_protocol::T_DIR,ino_out)!=extent_protocol::OK){
+		return IOERR;
+	}
+	buf+=name;
+	buf+='./';
+	std::stringstream st;
+	std::string str;
+	st<<ino_out;
+	st>>str;
+    buf+= str;
+	buf+='./';
+	if(ec->put(parent,buf)!=extent_protocol::OK){
+		return IOERR;
+	}
+	return r;
 }
 
 int
@@ -320,7 +345,40 @@ int yfs_client::unlink(inum parent,const char *name)
      * note: you should remove the file using ec->remove,
      * and update the parent directory content.
      */
+    std::string buf;
+	if(ec->get(parent, buf) != extent_protocol::OK) {
+        return IOERR;
+    }
 
+	std::list<dirent> dir_list=str2list(buf);
+	std::list<dirent>::iterator it;
+    for (it=dir_list.begin(); it!=dir_list.end(); ++it){
+		if(std::string(name)==it->name)
+			break;
+	}
+	
+	if(it==dir_list.end()){
+		return r;
+	}
+	
+	if(ec->remove(it->inum)!=extent_protocol::OK) {
+        return IOERR;
+    }
+	dir_list.erase(it);
+	buf.clear();
+	for (it=dir_list.begin(); it!=dir_list.end(); ++it){
+		buf+=it->name;
+		buf+='./';
+        std::stringstream st;
+	    std::string str;
+	    st<<(it->inum);
+	    st>>str;
+        buf+= str;
+		buf+='./';
+	}
+	if(ec->put(parent, buf) != extent_protocol::OK) {
+        return IOERR;
+    }
     return r;
 }
 

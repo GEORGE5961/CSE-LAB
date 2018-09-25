@@ -215,7 +215,7 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
    * and copy them to buf_Out
    */
   struct inode * inode = get_inode(inum);
-
+  inode->atime = time(0);
   if (inode == NULL){
       printf("Cannot find inode");
   }
@@ -271,7 +271,9 @@ inode_manager::write_file(uint32_t inum, const char *buf, int size)
   uint32_t old_num = (inode->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
   uint32_t new_num = (size + BLOCK_SIZE - 1) / BLOCK_SIZE;
   inode->size = size;
-  inode->mtime = time(NULL);
+  inode->atime = time(0);
+	inode->mtime = time(0);
+	inode->ctime = time(0);
 
   if (inode == NULL){
       printf("Cannot find inode");

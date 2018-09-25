@@ -20,6 +20,13 @@
         "vector": "cpp",
         "bitset": "cpp",
         "initializer_list": "cpp",
-        "iterator": "cpp"
+        "iterator": "cpp",
+        "__config": "cpp",
+        "__nullptr": "cpp",
+        "exception": "cpp",
+        "new": "cpp",
+        "stdexcept": "cpp",
+        "typeinfo": "cpp",
+        "sstream": "cpp"
     }
 }
