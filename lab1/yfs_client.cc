@@ -65,8 +65,18 @@ yfs_client::isfile(inum inum)
 bool
 yfs_client::isdir(inum inum)
 {
-    // Oops! is this still correct when you implement symlink?
-    return ! isfile(inum);
+    extent_protocol::attr a;
+
+    if (ec->getattr(inum, a) != extent_protocol::OK) {
+        printf("error getting attr\n");
+        return false;
+    }
+
+    if (a.type == extent_protocol::T_DIR) {
+        printf("isdir: %lld is a dir\n", inum);
+        return true;
+    } 
+    return false;
 }
 
 int
@@ -176,13 +186,13 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
 		return IOERR;
 	}
 	buf += name;
-	buf += './';
+	buf += '/';
     std::stringstream st;
 	std::string str;
 	st<<ino_out;
 	st>>str;
     buf+= str;
-	buf+='./';
+	buf+='/';
 	if(ec->put(parent,buf)!=extent_protocol::OK){
 		r = IOERR;
 	}
@@ -215,13 +225,13 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
 		return IOERR;
 	}
 	buf+=name;
-	buf+='./';
+	buf+='/';
 	std::stringstream st;
 	std::string str;
 	st<<ino_out;
 	st>>str;
     buf+= str;
-	buf+='./';
+	buf+='/';
 	if(ec->put(parent,buf)!=extent_protocol::OK){
 		return IOERR;
 	}
@@ -300,6 +310,7 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
             data = data.substr(off, len - off);
         }
     }
+    else data="";
     return r;
 }
 
@@ -318,7 +329,7 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
 	if (ec->get(ino, buf) != extent_protocol::OK) {
         	r = IOERR;
         	return r;
-    	}
+    }
 	if(off+size>buf.size()){
 		buf.resize(off+size,'\0');
 	}
@@ -350,7 +361,7 @@ int yfs_client::unlink(inum parent,const char *name)
         return IOERR;
     }
 
-	std::list<dirent> dir_list=str2list(buf);
+	std::list<dirent> dir_list = str2list(buf);
 	std::list<dirent>::iterator it;
     for (it=dir_list.begin(); it!=dir_list.end(); ++it){
 		if(std::string(name)==it->name)
@@ -368,13 +379,13 @@ int yfs_client::unlink(inum parent,const char *name)
 	buf.clear();
 	for (it=dir_list.begin(); it!=dir_list.end(); ++it){
 		buf+=it->name;
-		buf+='./';
+		buf+='/';
         std::stringstream st;
 	    std::string str;
 	    st<<(it->inum);
 	    st>>str;
         buf+= str;
-		buf+='./';
+		buf+='/';
 	}
 	if(ec->put(parent, buf) != extent_protocol::OK) {
         return IOERR;
@@ -391,7 +402,7 @@ std::list<yfs_client::dirent> yfs_client::str2list(const std::string &str){
     while(pos!=std::string::npos){
         dir_vec.push_back(str.substr(mark,pos-mark));
         mark = pos+1;
-        pos = str.find_first_of('./',mark);
+        pos = str.find_first_of('/',mark);
 	}
     if(mark < str.size()){
 		dir_vec.push_back(str.substr(mark,str.size()-mark));
@@ -406,4 +417,66 @@ std::list<yfs_client::dirent> yfs_client::str2list(const std::string &str){
 		rst.push_back(tmpdir);
 	}
 	return rst;
+}
+
+int 
+yfs_client::symlink(const char*link, inum parent, const char*name, inum& ino_out){
+	int r = OK;
+	bool found=false;
+	inum fir_inum=0;
+	if(lookup(parent,name,found,fir_inum)!=extent_protocol::OK) {
+        return IOERR;
+    }
+	if(found){
+		return EXIST;
+	}
+	std::string buf;
+	if(ec->get(parent, buf) != extent_protocol::OK) {
+        return IOERR;
+    }
+	if(ec->create(extent_protocol::T_SYM,ino_out)!=extent_protocol::OK){
+		r = IOERR;
+		return r;
+	}
+	buf+=name;
+	buf += '/';
+    std::stringstream st;
+	std::string str;
+	st<<ino_out;
+	st>>str;
+    buf+= str;
+	buf+='/';
+	if(ec->put(parent,buf)!=extent_protocol::OK){
+		r = IOERR;
+		return r;
+	}
+	std::string link_str(link);
+	if(ec->put(ino_out,link_str)!=extent_protocol::OK){
+		return IOERR;
+	}
+	return r;
+}
+
+
+int 
+yfs_client::readlink(inum ino, std::string&data){
+	int r;
+	r=ec->get(ino, data);
+    return r;
+}
+
+
+int yfs_client::getsym(inum inum, syminfo &sin){
+	int r = OK;
+
+    extent_protocol::attr a;
+    if (ec->getattr(inum, a) != extent_protocol::OK) {
+        return IOERR;
+    }
+
+    sin.atime = a.atime;
+    sin.mtime = a.mtime;
+    sin.ctime = a.ctime;
+    sin.size = a.size;
+    return r;
 }

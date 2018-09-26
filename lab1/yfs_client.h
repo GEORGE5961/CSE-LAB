@@ -31,6 +31,13 @@ class yfs_client {
     yfs_client::inum inum;
   };
 
+  struct syminfo{
+  	unsigned long long size;
+  	unsigned long atime;
+	  unsigned long mtime;
+	  unsigned long ctime;
+  };
+
  private:
   static std::string filename(inum);
   static inum n2i(std::string);
@@ -56,6 +63,9 @@ class yfs_client {
   int mkdir(inum , const char *, mode_t , inum &);
   
   /** you may need to add symbolic link related methods here.*/
+  int symlink(const char*, inum, const char*, inum&);
+  int readlink(inum, std::string&);
+  int getsym(inum, syminfo &);
 };
 
 #endif 
