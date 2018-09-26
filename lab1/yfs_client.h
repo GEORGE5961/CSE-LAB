@@ -65,7 +65,7 @@ class yfs_client {
   /** you may need to add symbolic link related methods here.*/
   int symlink(const char*, inum, const char*, inum&);
   int readlink(inum, std::string&);
-  int getsym(inum, syminfo &);
+  int getsymlink(inum, syminfo &);
 };
 
 #endif 

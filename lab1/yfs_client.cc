@@ -140,24 +140,25 @@ yfs_client::setattr(inum ino, size_t size)
      * note: get the content of inode ino, and modify its content
      * according to the size (<, =, or >) content length.
      */
-    extent_protocol::attr a;
-    if (ec->getattr(ino, a) != extent_protocol::OK) {
-        return IOERR;
-    }
     std::string buf;
-    char *new_char=new char[size];
-    if(ec->get(ino, buf) != extent_protocol::OK) {
-        return IOERR;
+    extent_protocol::attr a;
+    extent_protocol::status ret;
+    if ((ret = ec->getattr(ino, a)) != extent_protocol::OK) {
+      printf("error getting attr, return not OK\n");
+      return ret;
     }
-    size_t copy_size = size<a.size ? size:a.size;
-    memcpy(new_char,buf.c_str(), copy_size);
-    std::string newbuf(new_char);
-    if(ec->put(ino,newbuf)!=extent_protocol::OK){
-        free(new_char);
-        return IOERR;
+    ec->get(ino, buf);
+    if (a.size < size) 
+    {
+      buf += std::string(size - a.size, '\0');
+    } 
+    else if (a.size > size) 
+    {
+      buf = buf.substr(0, size);
     }
-	free(new_char);
+    ec->put(ino, buf);
     return r;
+
 }
 
 int
@@ -310,7 +311,6 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
             data = data.substr(off, len - off);
         }
     }
-    else data="";
     return r;
 }
 
@@ -466,7 +466,8 @@ yfs_client::readlink(inum ino, std::string&data){
 }
 
 
-int yfs_client::getsym(inum inum, syminfo &sin){
+int 
+yfs_client::getsymlink(inum inum, syminfo &sin){
 	int r = OK;
 
     extent_protocol::attr a;

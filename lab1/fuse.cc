@@ -71,7 +71,7 @@ getattr(yfs_client::inum inum, struct stat &st)
         printf("   getattr -> %lu %lu %lu\n", info.atime, info.mtime, info.ctime);
     }else{
 	yfs_client::syminfo info;
-        ret = yfs->getsym(inum, info);
+        ret = yfs->getsymlink(inum, info);
         if(ret != yfs_client::OK)
             return ret;
         st.st_mode = S_IFLNK | 0777;
