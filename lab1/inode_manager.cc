@@ -10,12 +10,14 @@ disk::disk()
 void
 disk::read_block(blockid_t id, char *buf)
 {
+  // copy blocks[id] to buffer
   memcpy(buf, blocks[id], BLOCK_SIZE);
 }
 
 void
 disk::write_block(blockid_t id, const char *buf)
 {
+  // copy buffer to blocks[id]
   memcpy(blocks[id], buf, BLOCK_SIZE);
 }
 
@@ -37,6 +39,7 @@ block_manager::alloc_block()
       d->read_block(BBLOCK(id), buf);
       uint32_t pos = id % BLOCK_SIZE;
       uint32_t* bits = &((uint32_t*)buf)[pos/sizeof(uint32_t)];
+      // find block bit 0
       if((*bits & (1 << pos)) == 0){
           *bits |= (1 << pos);
           d->write_block(BBLOCK(id), buf);
@@ -64,6 +67,7 @@ block_manager::free_block(uint32_t id)
   d->read_block(bblock, buf);
   uint32_t pos = id % BLOCK_SIZE;
   uint32_t* bits = &((uint32_t*)buf)[pos/sizeof(uint32_t)];
+  // change bit->0
   *bits &= ~(1 << pos);
   d->write_block(bblock, buf);
   return;
@@ -120,7 +124,7 @@ inode_manager::alloc_inode(uint32_t type)
   inum++;
   char buf[BLOCK_SIZE];
   struct inode *ino;
-
+  // read before write
   bm->read_block(IBLOCK(inum, BLOCK_NUM), buf);
   ino = (struct inode*)buf + inum%IPB;
   ino->type = type;
@@ -226,6 +230,7 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
   uint32_t nblock = (nsize + BLOCK_SIZE - 1) / BLOCK_SIZE;
   *buf_out = (char *)malloc(nblock * BLOCK_SIZE);
 
+  // nblock <= NDIRECT
   if (NDIRECT >= nblock)
   {
     for (uint32_t i = 0; i < nblock; i++)
@@ -236,6 +241,7 @@ inode_manager::read_file(uint32_t inum, char **buf_out, int *size)
     free(inode);
     return;
   }
+  // nblock > NDIRECT
   else
   {
     for (uint32_t i = 0; i < NDIRECT; i++)
@@ -455,11 +461,13 @@ inode_manager::remove_file(uint32_t inum)
    */
   struct inode *inode = get_inode(inum);
   uint32_t nblock = (inode->size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  // nblock <= NDIRECT
   if (nblock <= NDIRECT)
   {
     free_inode(inum);
     return;
   }
+  // nblock > NDIRECT
   blockid_t *buf = (blockid_t *)malloc(BLOCK_SIZE);
   bm->read_block(inode->blocks[NDIRECT], (char *)buf);
   for (uint32_t i = 0; i < nblock - NDIRECT; i++)

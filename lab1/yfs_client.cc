@@ -148,6 +148,7 @@ yfs_client::setattr(inum ino, size_t size)
       return ret;
     }
     ec->get(ino, buf);
+    // compare a.size and size
     if (a.size < size) 
     {
       buf += std::string(size - a.size, '\0');
@@ -186,6 +187,7 @@ yfs_client::create(inum parent, const char *name, mode_t mode, inum &ino_out)
 	if(ec->create(extent_protocol::T_FILE,ino_out)!=extent_protocol::OK){
 		return IOERR;
 	}
+    // use '/' as the delimiter
 	buf += name;
 	buf += '/';
     std::stringstream st;
@@ -225,6 +227,7 @@ yfs_client::mkdir(inum parent, const char *name, mode_t mode, inum &ino_out)
 	if(ec->create(extent_protocol::T_DIR,ino_out)!=extent_protocol::OK){
 		return IOERR;
 	}
+    // use '/' as the delimiter
 	buf+=name;
 	buf+='/';
 	std::stringstream st;
@@ -280,6 +283,7 @@ yfs_client::readdir(inum dir, std::list<dirent> &list)
 	if (ec->get(dir, buf) != extent_protocol::OK) {
         return IOERR;
     }
+    // buf -> list
     std::list<dirent> dir_list=str2list(buf);
     std::list<dirent>::iterator it;
     for (it=dir_list.begin(); it!=dir_list.end(); ++it)
@@ -299,6 +303,7 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
      * note: read using ec->get().
      */
     ec->get(ino, data);
+    // change data size according to off
     if (off <= data.size())
     {
         if (off + size <= data.size())
@@ -311,6 +316,7 @@ yfs_client::read(inum ino, size_t size, off_t off, std::string &data)
             data = data.substr(off, len - off);
         }
     }
+    //  else data will be ""
     return r;
 }
 
@@ -341,8 +347,8 @@ yfs_client::write(inum ino, size_t size, off_t off, const char *data,
 		bytes_written=off-buf.size()+size;
 	}			
 	if (ec->put(ino, buf) != extent_protocol::OK) {
-        	r = IOERR;
-        	return r;
+        r = IOERR;
+        return r;
     }
     return r;
 }
@@ -367,7 +373,7 @@ int yfs_client::unlink(inum parent,const char *name)
 		if(std::string(name)==it->name)
 			break;
 	}
-	
+	// not found
 	if(it==dir_list.end()){
 		return r;
 	}
@@ -376,6 +382,7 @@ int yfs_client::unlink(inum parent,const char *name)
         return IOERR;
     }
 	dir_list.erase(it);
+    // unlink
 	buf.clear();
 	for (it=dir_list.begin(); it!=dir_list.end(); ++it){
 		buf+=it->name;
@@ -393,6 +400,7 @@ int yfs_client::unlink(inum parent,const char *name)
     return r;
 }
 
+// transform str to list
 std::list<yfs_client::dirent> yfs_client::str2list(const std::string &str){
 
     std::vector<std::string> dir_vec;
@@ -438,6 +446,7 @@ yfs_client::symlink(const char*link, inum parent, const char*name, inum& ino_out
 		r = IOERR;
 		return r;
 	}
+    // use '/' as the delimiter
 	buf+=name;
 	buf += '/';
     std::stringstream st;
@@ -457,7 +466,7 @@ yfs_client::symlink(const char*link, inum parent, const char*name, inum& ino_out
 	return r;
 }
 
-
+// read link
 int 
 yfs_client::readlink(inum ino, std::string&data){
 	int r;
@@ -465,7 +474,7 @@ yfs_client::readlink(inum ino, std::string&data){
     return r;
 }
 
-
+// get symbolic link info
 int 
 yfs_client::getsymlink(inum inum, syminfo &sin){
 	int r = OK;
